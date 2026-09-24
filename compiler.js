@@ -22,6 +22,13 @@ function tokenize(input) {
     });
   }
 
+  function emitText(start, end) {
+    if (start < end) {
+      enter("text", start);
+      exit("text", end);
+    }
+  }
+
   let index = 0;
   let state = "text";
   let tokenStart = 0;
@@ -32,8 +39,7 @@ function tokenize(input) {
 
     if (state === "text" && character === "*") {
       if (tokenStart < index) {
-        enter("text", tokenStart);
-        exit("text", index);
+        emitText(tokenStart, index);
       }
 
       emphasisStart = index;
@@ -41,8 +47,7 @@ function tokenize(input) {
       tokenStart = index + 1;
     } else if (state === "emphasis" && character === "*") {
       enter("emphasis", emphasisStart);
-      enter("text", tokenStart);
-      exit("text", index);
+      emitText(tokenStart, index);
       exit("emphasis", index + 1);
 
       state = "text";
@@ -54,12 +59,10 @@ function tokenize(input) {
 
   if (state === "text") {
     if (tokenStart < input.length) {
-      enter("text", tokenStart);
-      exit("text", input.length);
+      emitText(tokenStart, input.length);
     }
   } else if (state === "emphasis") {
-    enter("text", emphasisStart);
-    exit("text", input.length);
+    emitText(emphasisStart, input.length);
   }
 
   return events;
