@@ -1,5 +1,26 @@
+const input = "hello *world*";
+const events = tokenize(input);
+console.log(events);
+console.log(compile(input, events));
+
 function tokenize(input) {
-  const tokens = [];
+  const events = [];
+
+  function enter(token, start) {
+    events.push({
+      type: "enter",
+      token,
+      start,
+    });
+  }
+
+  function exit(token, end) {
+    events.push({
+      type: "exit",
+      token,
+      end,
+    });
+  }
 
   let index = 0;
   let state = "text";
@@ -9,24 +30,20 @@ function tokenize(input) {
   while (index < input.length) {
     const character = input[index];
 
-    // console.log(`state: ${state} character: ${character}`);
-
     if (state === "text" && character === "*") {
       if (tokenStart < index) {
-        tokens.push({
-          type: "text",
-          value: input.slice(tokenStart, index),
-        });
+        enter("text", tokenStart);
+        exit("text", index);
       }
 
+      emphasisStart = index;
       state = "emphasis";
       tokenStart = index + 1;
-      emphasisStart = index;
     } else if (state === "emphasis" && character === "*") {
-      tokens.push({
-        type: "emphasis",
-        value: input.slice(tokenStart, index),
-      });
+      enter("emphasis", emphasisStart);
+      enter("text", tokenStart);
+      exit("text", index);
+      exit("emphasis", index + 1);
 
       state = "text";
       tokenStart = index + 1;
@@ -37,51 +54,41 @@ function tokenize(input) {
 
   if (state === "text") {
     if (tokenStart < input.length) {
-      tokens.push({
-        type: "text",
-        value: input.slice(tokenStart),
-      });
+      enter("text", tokenStart);
+      exit("text", input.length);
     }
   } else if (state === "emphasis") {
-    tokens.push({
-      type: "text",
-      value: input.slice(emphasisStart),
-    });
+    enter("text", emphasisStart);
+    exit("text", input.length);
   }
 
-  return tokens;
+  return events;
 }
 
-function compile(tokens) {
-  return (
-    "<p>" +
-    tokens
-      .map((token) => {
-        if (token.type === "text") {
-          return token.value;
-        }
+function compile(input, events) {
+  let output = "";
+  let textStart = 0;
 
-        if (token.type === "emphasis") {
-          return `<em>${token.value}</em>`;
-        }
-      })
-      .join("") +
-    "</p>"
-  );
+  for (const event of events) {
+    if (event.type === "enter") {
+      if (event.token === "text") {
+        textStart = event.start;
+      }
+
+      if (event.token === "emphasis") {
+        output += "<em>";
+      }
+    }
+
+    if (event.type === "exit") {
+      if (event.token === "text") {
+        output += input.slice(textStart, event.end);
+      }
+      if (event.token === "emphasis") {
+        output += "</em>";
+      }
+    }
+  }
+
+  return `<p>${output}</p>`;
 }
-
-const tokens = tokenize("hello");
-console.log(tokens);
-console.log(compile(tokens));
-const tokens1 = tokenize("hello *world*");
-console.log(tokens1);
-console.log(compile(tokens1));
-const tokens2 = tokenize("*hello* world");
-console.log(tokens2);
-console.log(compile(tokens2));
-const tokens3 = tokenize("hello *world");
-console.log(tokens3);
-console.log(compile(tokens3));
-const tokens4 = tokenize("*hello");
-console.log(tokens4);
-console.log(compile(tokens4));
