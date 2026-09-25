@@ -1,8 +1,26 @@
 function tokenize(input) {
-  let index = 0;
+  const events = [];
+
+  function enter(token, start) {
+    events.push({
+      type: "enter",
+      token,
+      start,
+    });
+  }
+
+  function exit(token, end) {
+    events.push({
+      type: "exit",
+      token,
+      end,
+    });
+  }
 
   function text(code) {
     if (code === "*") {
+      enter("emphasis", index);
+
       return emphasis;
     }
 
@@ -12,6 +30,7 @@ function tokenize(input) {
 
   function emphasis(code) {
     if (code === "*") {
+      exit("emphasis", index + 1);
       return text;
     }
 
@@ -20,6 +39,7 @@ function tokenize(input) {
     return emphasis;
   }
 
+  let index = 0;
   let state = text;
 
   while (index < input.length) {
@@ -29,6 +49,10 @@ function tokenize(input) {
 
     index++;
   }
+
+  return events;
 }
 
-tokenize("hello *world*");
+const input = "hello *world*";
+
+console.log(tokenize(input));
