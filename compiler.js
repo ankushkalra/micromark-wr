@@ -1,4 +1,4 @@
-const input = "hello *world*";
+const input = "hello **world**";
 const events = tokenize(input);
 console.log(events);
 console.log(compile(input, events));
@@ -33,36 +33,74 @@ function tokenize(input) {
   let state = "text";
   let tokenStart = 0;
   let emphasisStart = -1;
+  let strongStart = -1;
 
   while (index < input.length) {
     const character = input[index];
+    const next = input[index + 1];
 
-    if (state === "text" && character === "*") {
-      if (tokenStart < index) {
+    if (state === "text") {
+      if (character === "*" && next === "*") {
         emitText(tokenStart, index);
+        strongStart = index;
+        tokenStart = index + 2;
+        state = "strong";
+
+        index += 2;
+        continue;
       }
 
-      emphasisStart = index;
-      state = "emphasis";
-      tokenStart = index + 1;
-    } else if (state === "emphasis" && character === "*") {
-      enter("emphasis", emphasisStart);
-      emitText(tokenStart, index);
-      exit("emphasis", index + 1);
+      if (character === "*") {
+        emitText(tokenStart, index);
+        emphasisStart = index;
+        tokenStart = index + 1;
+        state = "emphasis";
 
-      state = "text";
-      tokenStart = index + 1;
+        index++;
+        continue;
+      }
+    }
+
+    if (state === "emphasis") {
+      if (character === "*") {
+        enter("emphasis", emphasisStart);
+
+        emitText(tokenStart, index);
+
+        exit("emphasis", index + 1);
+
+        tokenStart = index + 1;
+        state = "text";
+
+        index++;
+        continue;
+      }
+    }
+
+    if (state === "strong") {
+      if (character === "*" && next === "*") {
+        enter("strong", strongStart);
+        emitText(tokenStart, index);
+        exit("strong", index + 2);
+
+        tokenStart = index + 2;
+        state = "text";
+
+        index += 2;
+        continue;
+      }
     }
 
     index++;
   }
 
+  // EOF
   if (state === "text") {
-    if (tokenStart < input.length) {
-      emitText(tokenStart, input.length);
-    }
+    emitText(tokenStart, input.length);
   } else if (state === "emphasis") {
     emitText(emphasisStart, input.length);
+  } else if (state === "strong") {
+    emitText(strongStart, input.length);
   }
 
   return events;
@@ -81,6 +119,10 @@ function compile(input, events) {
       if (event.token === "emphasis") {
         output += "<em>";
       }
+
+      if (event.token === "strong") {
+        output += "<strong>";
+      }
     }
 
     if (event.type === "exit") {
@@ -89,6 +131,9 @@ function compile(input, events) {
       }
       if (event.token === "emphasis") {
         output += "</em>";
+      }
+      if (event.token === "strong") {
+        output += "</strong>";
       }
     }
   }
