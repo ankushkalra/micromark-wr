@@ -1,12 +1,15 @@
-const input = "hello **world**";
+const input = "*hello **world***";
 const events = tokenize(input);
 console.log(events);
 console.log(compile(input, events));
 
 function tokenize(input) {
   const events = [];
+  const stack = [];
 
   function enter(token, start) {
+    stack.push({ type: token, start });
+
     events.push({
       type: "enter",
       token,
@@ -15,6 +18,12 @@ function tokenize(input) {
   }
 
   function exit(token, end) {
+    const opened = stack.pop();
+
+    if (opened.type !== token) {
+      throw new Error(`Cannot close ${token}; top of stack is ${opened.type}`);
+    }
+
     events.push({
       type: "exit",
       token,
@@ -29,64 +38,73 @@ function tokenize(input) {
     }
   }
 
+  function getStarRunLength(input, index) {
+    let length = 0;
+
+    while (input[index + length] === "*") {
+      length++;
+    }
+
+    return length;
+  }
+
   let index = 0;
   let state = "text";
-  let tokenStart = 0;
+  let textStart = 0;
   let emphasisStart = -1;
   let strongStart = -1;
 
   while (index < input.length) {
     const character = input[index];
-    const next = input[index + 1];
 
-    if (state === "text") {
-      if (character === "*" && next === "*") {
-        emitText(tokenStart, index);
-        strongStart = index;
-        tokenStart = index + 2;
-        state = "strong";
+    if (character !== "*") {
+      index++;
+      continue;
+    }
+
+    const starRun = getStarRunLength(input, index);
+
+    if (stack.length === 0) {
+      emitText(textStart, index);
+      if (starRun >= 2) {
+        enter("strong", index);
+        index += 2;
+      } else {
+        enter("emphasis", index);
+        index += 1;
+      }
+
+      textStart = index;
+      continue;
+    }
+
+    const current = stack[stack.length - 1];
+
+    if (current.type === "emphasis") {
+      if (starRun >= 2) {
+        emitText(textStart, index);
+        enter("strong", index);
 
         index += 2;
+        textStart = index;
         continue;
       }
 
-      if (character === "*") {
-        emitText(tokenStart, index);
-        emphasisStart = index;
-        tokenStart = index + 1;
-        state = "emphasis";
+      emitText(textStart, index);
+      exit("emphasis", index + 1);
 
-        index++;
-        continue;
-      }
+      index += 1;
+      textStart = index;
+      continue;
     }
 
-    if (state === "emphasis") {
-      if (character === "*") {
-        enter("emphasis", emphasisStart);
-
-        emitText(tokenStart, index);
-
-        exit("emphasis", index + 1);
-
-        tokenStart = index + 1;
-        state = "text";
-
-        index++;
-        continue;
-      }
-    }
-
-    if (state === "strong") {
-      if (character === "*" && next === "*") {
-        enter("strong", strongStart);
-        emitText(tokenStart, index);
+    if (current.type === "strong") {
+      if (starRun >= 2) {
+        emitText(textStart, index);
         exit("strong", index + 2);
 
-        tokenStart = index + 2;
-        state = "text";
-
         index += 2;
+        textStart = index;
         continue;
       }
     }
@@ -95,12 +113,12 @@ function tokenize(input) {
   }
 
   // EOF
-  if (state === "text") {
-    emitText(tokenStart, input.length);
-  } else if (state === "emphasis") {
-    emitText(emphasisStart, input.length);
-  } else if (state === "strong") {
-    emitText(strongStart, input.length);
+  if (stack.length === 0) {
+    emitText(textStart, input.length);
+  } else {
+    const opened = stack[0];
+
+    emitText(opened.start, input.length);
   }
 
   return events;
