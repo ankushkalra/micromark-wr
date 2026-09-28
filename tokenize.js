@@ -3,53 +3,58 @@ function tokenize(input) {
 
   let index = 0;
 
-  function consume(code) {
-    console.log("consume:", code);
-    index++;
-  }
+  const effects = {
+    consume(code) {
+      index++;
+    },
+
+    reprocess() {
+      index--;
+    },
+
+    enter(token, start) {
+      events.push({
+        type: "enter",
+        token,
+        start,
+      });
+    },
+
+    exit(token, end) {
+      events.push({
+        type: "exit",
+        token,
+        end,
+      });
+    },
+  };
 
   function peek(offset = 0) {
     return input[index + offset];
   }
 
-  function enter(token, start) {
-    events.push({
-      type: "enter",
-      token,
-      start,
-    });
-  }
-
-  function exit(token, end) {
-    events.push({
-      type: "exit",
-      token,
-      end,
-    });
-  }
-
   function text(code) {
     if (code === "*") {
-      enter("emphasis", index);
+      effects.enter("emphasis", index);
 
-      consume(code);
+      effects.consume(code);
 
       return emphasis;
     }
 
-    consume(code);
+    effects.consume(code);
 
     return text;
   }
 
   function emphasis(code) {
     if (code === "*") {
-      consume(code);
-      exit("emphasis", index);
+      effects.consume(code);
+      effects.exit("emphasis", index);
       return text;
     }
 
-    consume(code);
+    effects.consume(code);
     return emphasis;
   }
 
@@ -58,12 +63,14 @@ function tokenize(input) {
   while (index < input.length) {
     const code = input[index];
 
+    console.log("BEFORE:", index, code);
     state = state(code);
+    console.log("AFTER:", index);
   }
 
   return events;
 }
 
-const input = "hello *world*";
-
-console.log(tokenize(input));
+console.log(tokenize("hello"));
+console.log(tokenize("*hello*"));
+console.log(tokenize("hello *world*"));

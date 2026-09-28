@@ -7,34 +7,41 @@ function tokenize(input) {
   const events = [];
   const stack = [];
 
-  function enter(token, start) {
-    stack.push({ type: token, start });
+  const effects = {
+    consume() {
+      index++;
+    },
+    enter(token, start = index) {
+      stack.push({ type: token, start });
 
-    events.push({
-      type: "enter",
-      token,
-      start,
-    });
-  }
+      events.push({
+        type: "enter",
+        token,
+        start,
+      });
+    },
 
-  function exit(token, end) {
-    const opened = stack.pop();
+    exit(token, end = index) {
+      const opened = stack.pop();
 
-    if (opened.type !== token) {
-      throw new Error(`Cannot close ${token}; top of stack is ${opened.type}`);
-    }
+      if (!opened || opened.type !== token) {
+        throw new Error(
+          `Cannot close ${token}; top of stack is ${opened.type}`,
+        );
+      }
 
-    events.push({
-      type: "exit",
-      token,
-      end,
-    });
-  }
+      events.push({
+        type: "exit",
+        token,
+        end,
+      });
+    },
+  };
 
   function emitText(start, end) {
     if (start < end) {
-      enter("text", start);
-      exit("text", end);
+      effects.enter("text", start);
+      effects.exit("text", end);
     }
   }
 
@@ -58,7 +65,7 @@ function tokenize(input) {
     const character = input[index];
 
     if (character !== "*") {
-      index++;
+      effects.consume();
       continue;
     }
 
@@ -67,11 +74,12 @@ function tokenize(input) {
     if (stack.length === 0) {
       emitText(textStart, index);
       if (starRun >= 2) {
-        enter("strong", index);
-        index += 2;
+        effects.enter("strong", index);
+        effects.consume();
+        effects.consume();
       } else {
-        enter("emphasis", index);
-        index += 1;
+        effects.enter("emphasis", index);
+        effects.consume();
       }
 
       textStart = index;
@@ -83,17 +91,18 @@ function tokenize(input) {
     if (current.type === "emphasis") {
       if (starRun >= 2) {
         emitText(textStart, index);
-        enter("strong", index);
+        effects.enter("strong", index);
 
-        index += 2;
+        effects.consume();
+        effects.consume();
         textStart = index;
         continue;
       }
 
       emitText(textStart, index);
-      exit("emphasis", index + 1);
+      effects.exit("emphasis", index + 1);
 
-      index += 1;
+      effects.consume();
       textStart = index;
       continue;
     }
@@ -101,15 +110,16 @@ function tokenize(input) {
     if (current.type === "strong") {
       if (starRun >= 2) {
         emitText(textStart, index);
-        exit("strong", index + 2);
+        effects.exit("strong", index + 2);
 
-        index += 2;
+        effects.consume();
+        effects.consume();
         textStart = index;
         continue;
       }
     }
 
-    index++;
+    effects.consume();
   }
 
   // EOF
