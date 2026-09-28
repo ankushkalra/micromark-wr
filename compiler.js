@@ -11,6 +11,11 @@ function tokenize(input) {
     consume() {
       index++;
     },
+
+    peek(offset = 0) {
+      return input[index + offset];
+    },
+
     enter(token, start = index) {
       stack.push({ type: token, start });
 
@@ -48,7 +53,7 @@ function tokenize(input) {
   function getStarRunLength(input, index) {
     let length = 0;
 
-    while (input[index + length] === "*") {
+    while (effects.peek(length) === "*") {
       length++;
     }
 
@@ -56,70 +61,81 @@ function tokenize(input) {
   }
 
   let index = 0;
-  let state = "text";
   let textStart = 0;
   let emphasisStart = -1;
   let strongStart = -1;
 
-  while (index < input.length) {
-    const character = input[index];
-
-    if (character !== "*") {
+  function text(code) {
+    if (code !== "*") {
       effects.consume();
-      continue;
+      return text;
     }
 
-    const starRun = getStarRunLength(input, index);
+    emitText(textStart, index);
 
-    if (stack.length === 0) {
-      emitText(textStart, index);
-      if (starRun >= 2) {
-        effects.enter("strong", index);
-        effects.consume();
-        effects.consume();
-      } else {
-        effects.enter("emphasis", index);
-        effects.consume();
-      }
-
-      textStart = index;
-      continue;
-    }
-
-    const current = stack[stack.length - 1];
-
-    if (current.type === "emphasis") {
-      if (starRun >= 2) {
-        emitText(textStart, index);
-        effects.enter("strong", index);
-
-        effects.consume();
-        effects.consume();
-        textStart = index;
-        continue;
-      }
-
-      emitText(textStart, index);
-      effects.exit("emphasis", index + 1);
-
+    const starRun = getStarRunLength();
+    if (starRun >= 2) {
+      effects.enter("strong", index);
+      effects.consume();
       effects.consume();
       textStart = index;
-      continue;
+      return strong;
+    } else {
+      effects.enter("emphasis", index);
+      effects.consume();
+      textStart = index;
+      return emphasis;
     }
+  }
 
-    if (current.type === "strong") {
-      if (starRun >= 2) {
-        emitText(textStart, index);
-        effects.exit("strong", index + 2);
-
-        effects.consume();
-        effects.consume();
-        textStart = index;
-        continue;
-      }
+  function emphasis(code) {
+    if (code !== "*") {
+      effects.consume();
+      return emphasis;
     }
+    const starRun = getStarRunLength();
+    if (starRun >= 2) {
+      emitText(textStart, index);
+      effects.enter("strong", index);
 
+      effects.consume();
+      effects.consume();
+      textStart = index;
+      return strong;
+    } else {
+      emitText(textStart, index);
+      effects.consume();
+      effects.exit("emphasis", index);
+
+      textStart = index;
+      return text;
+    }
+  }
+
+  function strong(code) {
+    if (code !== "*") {
+      effects.consume();
+      return strong;
+    }
+    const starRun = getStarRunLength();
+    if (starRun >= 2) {
+      emitText(textStart, index);
+
+      effects.consume();
+      effects.consume();
+      effects.exit("strong", index);
+
+      textStart = index;
+      return emphasis;
+    }
     effects.consume();
+    return strong;
+  }
+
+  let state = text;
+
+  while (index < input.length) {
+    state = state(effects.peek());
   }
 
   // EOF
@@ -127,7 +143,6 @@ function tokenize(input) {
     emitText(textStart, input.length);
   } else {
     const opened = stack[0];
-
     emitText(opened.start, input.length);
   }
 
