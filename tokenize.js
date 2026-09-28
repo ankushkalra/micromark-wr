@@ -1,6 +1,17 @@
 function tokenize(input) {
   const events = [];
 
+  let index = 0;
+
+  function consume(code) {
+    console.log("consume:", code);
+    index++;
+  }
+
+  function peek(offset = 0) {
+    return input[index + offset];
+  }
+
   function enter(token, start) {
     events.push({
       type: "enter",
@@ -21,33 +32,33 @@ function tokenize(input) {
     if (code === "*") {
       enter("emphasis", index);
 
+      consume(code);
+
       return emphasis;
     }
 
-    console.log("TEXT:", code);
+    consume(code);
+
     return text;
   }
 
   function emphasis(code) {
     if (code === "*") {
-      exit("emphasis", index + 1);
+      consume(code);
+      exit("emphasis", index);
       return text;
     }
 
-    console.log("EMPHASIS:", code);
-
+    consume(code);
     return emphasis;
   }
 
-  let index = 0;
   let state = text;
 
   while (index < input.length) {
     const code = input[index];
 
     state = state(code);
-
-    index++;
   }
 
   return events;
