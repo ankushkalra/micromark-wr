@@ -17,14 +17,6 @@ inputs.forEach((input) => {
 
 function tokenize(input) {
   const events = [];
-  const stack = [];
-
-  function unclosed() {
-    const outer = stack[0];
-    events.length = outer.eventIndex;
-    stack.length = 0;
-    emitText(outer.start, index);
-  }
 
   const effects = {
     consume() {
@@ -36,8 +28,6 @@ function tokenize(input) {
     },
 
     enter(token, start = index) {
-      stack.push({ type: token, start, eventIndex: events.length });
-
       events.push({
         type: "enter",
         token,
@@ -46,14 +36,6 @@ function tokenize(input) {
     },
 
     exit(token, end = index) {
-      const opened = stack.pop();
-
-      if (!opened || opened.type !== token) {
-        throw new Error(
-          `Cannot close ${token}; top of stack is ${opened.type}`,
-        );
-      }
-
       events.push({
         type: "exit",
         token,
@@ -69,20 +51,8 @@ function tokenize(input) {
     }
   }
 
-  function getStarRunLength(input, index) {
-    let length = 0;
-
-    while (effects.peek(length) === "*") {
-      length++;
-    }
-
-    return length;
-  }
-
   let index = 0;
   let textStart = 0;
-  let emphasisStart = -1;
-  let strongStart = -1;
   let runStart = -1;
 
   function text(code) {
@@ -111,52 +81,6 @@ function tokenize(input) {
     effects.exit("starRun", index);
     textStart = index;
     return text(code);
-  }
-
-  function emphasis(code) {
-    if (code === null) return unclosed();
-    if (code !== "*") {
-      effects.consume();
-      return emphasis;
-    }
-    const starRun = getStarRunLength();
-    if (starRun >= 2) {
-      emitText(textStart, index);
-      effects.enter("strong", index);
-
-      effects.consume();
-      effects.consume();
-      textStart = index;
-      return strong;
-    } else {
-      emitText(textStart, index);
-      effects.consume();
-      effects.exit("emphasis", index);
-
-      textStart = index;
-      return text;
-    }
-  }
-
-  function strong(code) {
-    if (code === null) return unclosed();
-    if (code !== "*") {
-      effects.consume();
-      return strong;
-    }
-    const starRun = getStarRunLength();
-    if (starRun >= 2) {
-      emitText(textStart, index);
-
-      effects.consume();
-      effects.consume();
-      effects.exit("strong", index);
-
-      textStart = index;
-      return emphasis;
-    }
-    effects.consume();
-    return strong;
   }
 
   let state = text;
